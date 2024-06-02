@@ -49,7 +49,7 @@ def send_ard_num():
 		data = json.loads(r.text)
 		is_get = data['message']
 		if is_get:
-			count_arduinos = requests.get(url = urlrpi + '/get_arduino_count')
+			count_arduinos = requests.get(url = urlrpi + '/get_arduino_count').json()
 			requests.post(url = urlserver + '/send_arduinos_count', json=count_arduinos)
 		time.sleep(2)
         
@@ -60,8 +60,9 @@ def send_daily_goal():
 		data = json.loads(r.text)
 		is_get = data['message']
 		if is_get:
-			payload = jsonify({'bowl_name': data['bowl_name']})
-			daily_goal = requests.get(url = urlrpi + '/get_daily_goal', params=payload)
+			print(data)
+			payload = {'bowl_name': data['bowl_name']}
+			daily_goal = requests.get(url = urlrpi + '/get_daily_goal', params=payload).json()
 			requests.post(url = urlserver + '/send_daily_goal', json=daily_goal)
 		time.sleep(2)
     
@@ -72,8 +73,8 @@ def send_food_amount():
 		data = json.loads(r.text)
 		is_get = data['message']
 		if is_get:
-			payload = jsonify({'bowl_name': data['bowl_name']})
-			food = requests.get(url = urlrpi + '/get_food_amount', params=payload)
+			payload = {'bowl_name': data['bowl_name']}
+			food = requests.get(url = urlrpi + '/get_food_amount', params=payload).json()
 			requests.post(url = urlserver + '/send_food_amount', json=food)
 		time.sleep(2)
 
@@ -84,8 +85,8 @@ def send_feeding_time():
 		data = json.loads(r.text)
 		is_get = data['message']
 		if is_get:
-			payload = jsonify({'bowl_name': data['bowl_name']})
-			feeding_time = requests.get(url = urlrpi + '/get_last_feeding_time', params=payload)
+			payload = {'bowl_name': data['bowl_name']}
+			feeding_time = requests.get(url = urlrpi + '/get_last_feeding_time', params=payload).json()
 			requests.post(url = urlserver + '/send_last_feeding_time', json=feeding_time)
 		time.sleep(2)
 
@@ -98,7 +99,7 @@ def get_set_daily_goal():
 		if is_get:
 			bowl_name = data['bowl_name']
 			daily_goal = data['daily_goal']
-			payload = jsonify({'bowl_name': bowl_name, 'daily_goal': daily_goal })
+			payload = {'bowl_name': bowl_name, 'daily_goal': daily_goal }
 			requests.post(url = urlrpi + '/set_daily_goal', json=payload)
 			requests.post(url = urlserver + '/rpi_set_daily_goal', json={'message':'DONE'})
 		time.sleep(2)
@@ -112,7 +113,7 @@ def get_set_feeding_time():
 		if is_get:
 			bowl_name = data['bowl_name']
 			feeding_time = data['feeding_time']
-			payload = jsonify({'bowl_name': bowl_name, 'feeding_time': feeding_time })
+			payload = {'bowl_name': bowl_name, 'feeding_time': feeding_time }
 			requests.post(url = urlrpi + '/set_feeding_time', json=payload)
 			requests.post(url = urlserver + '/rpi_set_feeding_time', json={'message':'DONE'})
 		time.sleep(2)
@@ -125,8 +126,8 @@ def send_weight():
 		is_get = data['message']
 		if is_get:
 			bowl_name = data['bowl_name']
-			payload = jsonify({'bowl_name': bowl_name})
-			weight = requests.get(url = urlrpi + '/get_weight', params=payload)
+			payload = {'bowl_name': bowl_name}
+			weight = requests.get(url = urlrpi + '/get_weight', params=payload).json()
 			requests.post(url = urlserver + '/send_weight', json=weight)
 		time.sleep(2)
 
@@ -147,12 +148,15 @@ def get_bowls_list():
 # testar
 @app.route('/get_arduino_count', methods=['GET'])
 def ard_count():
-    conn = sqlite3.connect('database.db', check_same_thread=False)
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM arduinos_animal where animal_name = to_be_def")
-    nard = cursor.fetchall()
-    conn.close()
-    return jsonify({'number_arduinos' : int(nard[0])})
+	try:
+		conn = sqlite3.connect('database.db', check_same_thread=False)
+		cursor = conn.cursor()
+		cursor.execute("SELECT COUNT(*) FROM arduinos_animal WHERE animal_name = to_be_def")
+		nard = cursor.fetchall()
+		conn.close()
+	except:
+		nard = [0]
+	return jsonify({'number_arduinos' : int(nard[0])})
     
         
 
