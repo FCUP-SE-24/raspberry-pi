@@ -21,10 +21,10 @@ conn.execute('''CREATE TABLE Users (user_id VARCHAR(250) PRIMARY KEY NOT NULL);'
 
 conn.execute('''CREATE TABLE Bowls (
 						animal_name VARCHAR(50) PRIMARY KEY, 
-						daily_dose FLOAT, 
+						daily_dose INTEGER, 
 						bowl_weight FLOAT, 
-						food_dispensed FLOAT, 
-						last_food DATETIME
+						food_dispensed INTEGER, 
+						last_food VARCHAR(250)
 						);''')
 
 conn.execute('''CREATE TABLE UserBowls (

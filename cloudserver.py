@@ -6,8 +6,8 @@ import json
 import threading
 import time
 
-#urlserver = "http://46.101.71.117:5000"
-urlserver = "http://127.0.0.1:5000"
+urlserver = "http://46.101.71.117:5000"
+#urlserver = "http://127.0.0.1:5000"
 urlrpi = "http://127.0.0.1:5001"
 
 app = Flask(__name__)
@@ -43,6 +43,7 @@ def send_bowls_list():
 			requests.post(url = urlserver + '/send_bowls_list', json=bowls)
 		time.sleep(2)
 
+
 def send_ard_num():
 	while True:
 		r = requests.get(url = urlserver + '/send_arduinos_count')
@@ -60,7 +61,6 @@ def send_daily_goal():
 		data = json.loads(r.text)
 		is_get = data['message']
 		if is_get:
-			print(data)
 			payload = {'bowl_name': data['bowl_name']}
 			daily_goal = requests.get(url = urlrpi + '/get_daily_goal', params=payload).json()
 			requests.post(url = urlserver + '/send_daily_goal', json=daily_goal)
@@ -119,16 +119,16 @@ def get_set_feeding_time():
 		time.sleep(2)
 		
 		
-def send_weight():
+def send_bowl_weight():
 	while True:
-		r = requests.get(url = urlserver + '/send_weight')
+		r = requests.get(url = urlserver + '/send_bowl_weight')
 		data = json.loads(r.text)
 		is_get = data['message']
 		if is_get:
 			bowl_name = data['bowl_name']
 			payload = {'bowl_name': bowl_name}
-			weight = requests.get(url = urlrpi + '/get_weight', params=payload).json()
-			requests.post(url = urlserver + '/send_weight', json=weight)
+			weight = requests.get(url = urlrpi + '/get_bowl_weight', params=payload).json()
+			requests.post(url = urlserver + '/send_bowl_weight', json=weight)
 		time.sleep(2)
 
 
@@ -145,22 +145,17 @@ def get_bowls_list():
     return jsonify({'bowls' : lst})
     
     
-# testar
 @app.route('/get_arduino_count', methods=['GET'])
 def ard_count():
-	try:
-		conn = sqlite3.connect('database.db', check_same_thread=False)
-		cursor = conn.cursor()
-		cursor.execute("SELECT COUNT(*) FROM arduinos_animal WHERE animal_name = to_be_def")
-		nard = cursor.fetchall()
-		conn.close()
-	except:
-		nard = [0]
-	return jsonify({'number_arduinos' : int(nard[0])})
+	conn = sqlite3.connect('database.db', check_same_thread=False)
+	cursor = conn.cursor()
+	cursor.execute("SELECT COUNT(*) FROM arduinos_animal WHERE animal_name = ? ", ("to_be_def",))
+	nard = cursor.fetchall()
+	conn.close()
+	return jsonify({'number_arduinos' : int(nard[0][0])})
     
         
-
-#testar    
+    
 @app.route('/get_daily_goal', methods=['GET'])
 def get_daily_goal():
     data = request.args
@@ -170,10 +165,10 @@ def get_daily_goal():
     cursor.execute("SELECT daily_dose FROM Bowls WHERE animal_name=?", (bowl_name,))
     dose = cursor.fetchone()
     conn.close()
-    return jsonify({'daily_goal': float(dose[0])})
+    return jsonify({'daily_goal': int(dose[0])})
 
 
-#testar
+
 @app.route('/get_food_amount', methods=['GET'])
 def get_food_amount():
     data = request.args
@@ -183,10 +178,10 @@ def get_food_amount():
     cursor.execute("SELECT food_dispensed FROM Bowls WHERE animal_name=?", (bowl_name,))
     food = cursor.fetchone()
     conn.close()
-    return jsonify({'food_amount': float(food[0])})
+    return jsonify({'food_amount': int(food[0])})
 
 
-# testar
+
 @app.route('/get_last_feeding_time', methods=['GET'])
 def get_last_feeding_time():
     data = request.args
@@ -199,7 +194,7 @@ def get_last_feeding_time():
     return jsonify({'last_feeding_time': food})
 
 
-#testar
+
 @app.route('/set_daily_goal', methods=['POST'])
 def set_daily_goal():
     data = request.get_json()
@@ -213,7 +208,6 @@ def set_daily_goal():
     return jsonify({'message': f'Daily goal of {bowl_name} was successfully changed to {daily_goal}'})
 
 
-#testar
 @app.route('/set_feeding_time', methods=['POST'])
 def set_feeding_time():
    data = request.get_json()
@@ -243,7 +237,7 @@ def add_bowl():
         cursor.execute("INSERT INTO Users (user_id) VALUES (?)", (user_id,))
     cursor.execute("INSERT INTO UserBowls (user_id, animal_name) VALUES (?, ?)", (user_id, bowl_name))    
     cursor.execute("UPDATE arduinos_animal SET animal_name=? WHERE arduino_id=?", (bowl_name, arduino[0]))
-    cursor.execute("INSERT INTO Bowls (animal_name, daily_dose, bowl_weight, food_dispensed, last_food) VALUES (?, ?, null, null, null)", (bowl_name, daily_goal))    
+    cursor.execute("INSERT INTO Bowls (animal_name, daily_dose, bowl_weight, food_dispensed, last_food) VALUES (?, ?, null, 0, null)", (bowl_name, daily_goal))    
     conn.commit()
     conn.close()
     return jsonify({'message': f'Bowl {bowl_name} added successfully with daily goal of {daily_goal}'})
@@ -277,8 +271,8 @@ def connect_arduino():
  
 
 #testar    
-@app.route('/post_weight', methods=['POST'])
-def get_weight_from_arduino():
+@app.route('/post_bowl_weight', methods=['POST'])
+def get_bowl_weight_from_arduino():
 	data = json.loads(request.data.decode('utf-8'))
 	conn = sqlite3.connect('database.db',  check_same_thread=False)
 	cursor = conn.cursor()
@@ -291,16 +285,19 @@ def get_weight_from_arduino():
 
 
 #testar
-@app.route('/get_weight', methods=['GET'])
-def get_weight():
+@app.route('/get_bowl_weight', methods=['GET'])
+def get_bowl_weight():
     data = request.args
     bowl_name = data.get('bowl_name')
     conn = sqlite3.connect('database.db', check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("SELECT bowl_weight FROM Bowls WHERE animal_name=?", (bowl_name,))
     weight = cursor.fetchone()
+    weight = weight[0]
     conn.close()
-    return jsonify({'weight': float(weight[0])})
+    if weight:
+        weight = float(weight)
+    return jsonify({'bowl_weight': weight})
 
 '''
 @app.route('/reset_bowl', methods=['POST'])
@@ -327,6 +324,6 @@ if __name__ == '__main__':
     thread_bowls_lst.start()
     thread_bowls_lst = threading.Thread(target=get_set_feeding_time)
     thread_bowls_lst.start()
-    thread_bowls_lst = threading.Thread(target=send_weight)
+    thread_bowls_lst = threading.Thread(target=send_bowl_weight)
     thread_bowls_lst.start()
     app.run(threaded=True, host='0.0.0.0', port=5001)
