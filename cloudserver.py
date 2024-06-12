@@ -11,8 +11,8 @@ import socket
 urlrpi = "http://127.0.0.1:5001"
 urlserver = "http://127.0.0.1:5002"
 
-# conn dict
-sockets_dic = {}
+
+sockers_dic = {}
 
 app = Flask(__name__)
 api = Api(app)
@@ -39,11 +39,11 @@ def arduino_connection_handler():
 		if not arduino_info:
 			cursor.execute("INSERT INTO arduinos_animal (arduino_id, animal_name) VALUES (?, ?)", (addr[0], "to_be_def"))
 			con.commit()
-	sockets_dic[addr] = conn
+	sockers_dic[addr] = conn		
 	# Start threads for Arduino communication
 	thread_receive = threading.Thread(target=receive_data, args=(conn,))
 	thread_receive.start()
-	thread_receive.join()
+	thread_receive.join()	
 
 def get_add_bowl():
     while True:
@@ -168,7 +168,7 @@ def send_motor_info():
             
             if arduino_info:
                 arduino_ip = arduino_info[0]
-		conns = sockets_dic[arduino_ip] 
+                conns = sockets_dic[arduino_ip]
                 try:
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                         sock.connect((arduino_ip, 5000))  # Adjust port if necessary
@@ -179,7 +179,7 @@ def send_motor_info():
                         else:
                             command = lastMotorState
                         
-                        sock.sendall(command.encode())
+                        conns.sendall(command.encode())
                         print(f"Comando '{command}' enviado ao Arduino no IP {arduino_ip}.")
                 except Exception as e:
                     print(f"Erro ao conectar ou enviar comando para o Arduino: {e}")
