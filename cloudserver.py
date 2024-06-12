@@ -401,6 +401,7 @@ def get_food_weight():
 
 if __name__ == '__main__':
     # rpi -> cloudserver
+    '''
     thread_add_bowl = threading.Thread(target=get_add_bowl)
     thread_add_bowl.start()
     thread_bowls_lst = threading.Thread(target=send_bowls_list)
@@ -417,6 +418,7 @@ if __name__ == '__main__':
     thread_set_daily_goal.start()
     thread_set_feeding_time = threading.Thread(target=get_set_feeding_time)
     thread_set_feeding_time.start()
+    '''
     thread_bowl_weight = threading.Thread(target=send_bowl_weight)
     thread_bowl_weight.start()
     thread_motor = threading.Thread(target=send_motor_info)
