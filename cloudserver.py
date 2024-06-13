@@ -11,15 +11,15 @@ import socket
 urlrpi = "http://127.0.0.1:5001"
 urlserver = "http://127.0.0.1:5002"
 
-
-sockers_dic = {}
-
 app = Flask(__name__)
 api = Api(app)
 
 lastMotorState = False
 lastWeightState = False
 motor_activate = False
+
+sockets_dic = {}
+conn = ""
 
 # Configurações do servidor
 HOST = '0.0.0.0'  # Escuta em todas as interfaces de rede disponíveis
@@ -39,11 +39,11 @@ def arduino_connection_handler():
 		if not arduino_info:
 			cursor.execute("INSERT INTO arduinos_animal (arduino_id, animal_name) VALUES (?, ?)", (addr[0], "to_be_def"))
 			con.commit()
-	sockers_dic[addr] = conn		
+	sockets_dic[str(addr[0])] = conn		
 	# Start threads for Arduino communication
-	thread_receive = threading.Thread(target=receive_data, args=(conn,))
-	thread_receive.start()
-	thread_receive.join()	
+	#thread_receive = threading.Thread(target=receive_data, args=(conn,))
+	#thread_receive.start()
+	#thread_receive.join()	
 
 def get_add_bowl():
     while True:
@@ -145,12 +145,95 @@ def send_bowl_weight():
         r = requests.get(url=urlserver + '/send_bowl_weight')
         data = json.loads(r.text)
         is_get = data['message']
+        print(is_get)
         if is_get:
             bowl_name = data['bowl_name']
-            payload = {'bowl_name': bowl_name}
-            weight = requests.get(url=urlrpi + '/get_weight', params=payload).json()
-            requests.post(url=urlserver + '/send_bowl_weight', json=weight)
+            print(bowl_name, is_get)
+            with sqlite3.connect('database.db', check_same_thread=False) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("SELECT bowl_weight FROM Bowls WHERE animal_name=?", (bowl_name,))
+                bowl_weight = cursor.fetchone()
+                print("Bowl weight fetched:", bowl_weight)
+                
+                cursor.execute("SELECT arduino_id FROM arduinos_animal WHERE animal_name=?", (bowl_name,))
+                arduino_info = cursor.fetchone()
+                print("Arduino info fetched:", arduino_info)
+                
+            bowl_weight = bowl_weight[0] if bowl_weight else None
+            if arduino_info:
+                arduino_ip = arduino_info[0]
+                conns = sockets_dic[str(arduino_ip)]
+                print(arduino_ip)
+            
+                data = conns.recv(1024)
+                received_str = data.decode()
+                        
+                # Extract the first value from the received string
+                ard_weight = received_str.split()[0]
+                print(ard_weight)
+            
+                if bowl_weight:
+                    weight = int(ard_weight) - int(bowl_weight)
+                else:
+                    weight = 0
+            else:
+                weight = 0
+            
+            json_weight = {'bowl_weight': weight}
+            requests.post(url=urlserver + '/send_bowl_weight', json=json_weight)
+        
+        time.sleep(0.5)
+
+
+def reset_scale():
+    while True:
+        r = requests.get(url=urlserver + '/send_reset_bowl')
+        data = json.loads(r.text)
+        print(data)
+        print("reset scaale")
+        is_get = data['message']
+        print(is_get)
+        if is_get:
+            bowl_name = data['bowl_name']
+            print(bowl_name, is_get)
+            with sqlite3.connect('database.db', check_same_thread=False) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("SELECT arduino_id FROM arduinos_animal WHERE animal_name=?", (bowl_name,))
+                arduino_info = cursor.fetchone()
+                print("Arduino info fetched:", arduino_info)
+                
+            if arduino_info:
+                arduino_ip = arduino_info[0]
+                conns = sockets_dic[str(arduino_ip)]
+                print(arduino_ip)
+                
+                try:
+                    command = 'reset_scale'
+                    conns.sendall(command.encode())
+                    
+                    print(f"Comando '{command}' enviado ao Arduino no IP {arduino_ip}.")
+                    time.sleep(4)
+                    data = conns.recv(1024)
+                    bowl_weight = data.decode()
+                    
+                except Exception as e:
+                    print(f"Erro ao conectar ou enviar comando para o Arduino: {e}")
+            
+            if not bowl_weight:
+                bowl_weight = 0
+                
+            with sqlite3.connect('database.db', check_same_thread=False) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("UPDATE 	Bowls SET bowl_weight=? WHERE animal_name=?", (bowl_weight, bowl_name))
+                conn.commit() 
+                
+            requests.post(url=urlserver + '/send_reset_bowl', json={'message':"DONE"})
+        
         time.sleep(2)
+
 
 def send_motor_info():
     while True:
@@ -168,19 +251,22 @@ def send_motor_info():
             
             if arduino_info:
                 arduino_ip = arduino_info[0]
-                conns = sockets_dic[arduino_ip]
+                print(sockets_dic)
+                print(type(arduino_ip))
+                conns = sockets_dic[str(arduino_ip)]
+                print(motor_state)
+                print(conns)
                 try:
-                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                        sock.connect((arduino_ip, 5000))  # Adjust port if necessary
-                        if motor_state == 'on':
-                            command = 'activate_motor'
-                        elif motor_state == 'off':
-                            command = 'deactivate_motor'
-                        else:
-                            command = lastMotorState
+                    if motor_state == 'on':
+                        command = 'activate_motor'
+                        print("tou aki")
+                    elif motor_state == 'off':
+                        command = 'deactivate_motor'
+                    else:
+                        command = lastMotorState
                         
-                        conns.sendall(command.encode())
-                        print(f"Comando '{command}' enviado ao Arduino no IP {arduino_ip}.")
+                    conns.sendall(command.encode())
+                    print(f"Comando '{command}' enviado ao Arduino no IP {arduino_ip}.")
                 except Exception as e:
                     print(f"Erro ao conectar ou enviar comando para o Arduino: {e}")
             
@@ -188,16 +274,16 @@ def send_motor_info():
         time.sleep(2)
 
 # Função para receber dados do Arduino
-def receive_data(conn):
-    try:
-        while True:
-            data = conn.recv(1024)
-            if not data:
-                break
-            print(f"Dados recebidos: {data.decode()}")
-    finally:
-        conn.close()
-        server_socket.close()
+#def receive_data(conn):
+#    try:
+#        while True:
+#            data = conn.recv(1024)
+#            if not data:
+#                break
+#            print(f"Dados recebidos: {data.decode()}")
+#    finally:
+#        conn.close()
+#        server_socket.close()
 '''
 # Função para enviar comandos ao Arduino
 def send_motor_command(state, conn):
@@ -401,7 +487,7 @@ def get_food_weight():
 
 if __name__ == '__main__':
     # rpi -> cloudserver
-    '''
+    
     thread_add_bowl = threading.Thread(target=get_add_bowl)
     thread_add_bowl.start()
     thread_bowls_lst = threading.Thread(target=send_bowls_list)
@@ -418,11 +504,12 @@ if __name__ == '__main__':
     thread_set_daily_goal.start()
     thread_set_feeding_time = threading.Thread(target=get_set_feeding_time)
     thread_set_feeding_time.start()
-    '''
     thread_bowl_weight = threading.Thread(target=send_bowl_weight)
     thread_bowl_weight.start()
     thread_motor = threading.Thread(target=send_motor_info)
     thread_motor.start()
+    thread_reset = threading.Thread(target=reset_scale)
+    thread_reset.start()
     
     # Start the Flask app in a separate thread
     threading.Thread(target=lambda: app.run(threaded=True, host='0.0.0.0', port=5001)).start()

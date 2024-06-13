@@ -50,7 +50,8 @@ new_feeding_time = {'message': False}
 reset_bowl_request = {'message': False}
 
 # motor status
-motor_request = {'message': True, 'bowl_name':'Cat', 'motor_state': 'on'}
+#motor_request = {'message': True, 'bowl_name':'Cat', 'motor_state': 'on'}
+motor_request = {'message' : False}
 
 #add_bowl_ready = threading.Event()
 
@@ -308,12 +309,12 @@ def reset_bowl():
    time.sleep(3)
    return {'message': f'Bowl {bowl_name}\'s weight has been updated'}
    
-@app.route('/send_reset_bowl', methods=['POST'])
+@app.route('/send_reset_bowl', methods=['POST','GET'])
 def send_reset_bowl():
    global reset_bowl_request
    if request.method == 'POST':
        reset_bowl_request = {'message': False}
-   return jsonify(motor_request)
+   return jsonify(reset_bowl_request)
 
 # ----------
 
